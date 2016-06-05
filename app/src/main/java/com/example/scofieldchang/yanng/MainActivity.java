@@ -13,6 +13,8 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.SimpleAdapter;
 
+import net.sf.json.JSON;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -82,11 +84,13 @@ public class MainActivity extends AppCompatActivity {
                     listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                         @Override
                         public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                            DisplayUnitData data = list.get(i);
-                            Log.d("info","url is " + data.url);
-                            Intent intent = new Intent(MainActivity.this, WebActivity.class);
-                            intent.putExtra("url", data.url);
-                            startActivity(intent);
+                            if (list != null){
+                                DisplayUnitData data = list.get(i);
+                                Log.d("info","url is " + data.url);
+                                Intent intent = new Intent(MainActivity.this, WebActivity.class);
+                                intent.putExtra("url", data.url);
+                                startActivity(intent);
+                            }
                         }
                     });
                     break;
@@ -105,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             Log.d("info", "NetWorkThread start");
-            String result = executeHttpGet();
+            String result = decode2(executeHttpGet());
             Log.d("info", result);
             list = getDisplayFormat(result);
             mHandler.sendEmptyMessage(LISTVIEW);
@@ -131,20 +135,37 @@ public class MainActivity extends AppCompatActivity {
             List<DisplayUnitData> lists = new ArrayList<DisplayUnitData>();
             String strings = jsonString.substring(1, jsonString.length()-1);
             Log.d("info",strings);
-            String[] jsons = strings.split("&");
-            for (int i =0; i < jsons.length; ++i){
-                Log.d("info", "json string: " + jsons[i]);
+            if (strings.contains("&")){
+                String[] jsons = strings.split("&");
+                for (int i =0; i < jsons.length; ++i){
+                    Log.d("info", "json string: " + jsons[i]);
+                    try {
+                        JSONTokener jsonParser = new JSONTokener(jsons[i]);
+                        JSONObject jsonObject =  (JSONObject)jsonParser.nextValue();
+                        DisplayUnitData displayData = getDisplayDataFormat(jsonObject);
+                        lists.add(displayData);
+                    } catch (JSONException e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
+                }
+                return lists;
+            }else{
                 try {
-                    JSONTokener jsonParser = new JSONTokener(jsons[i]);
-                    JSONObject jsonObject =  (JSONObject)jsonParser.nextValue();
-                    DisplayUnitData displayData = getDisplayDataFormat(jsonObject);
-                    lists.add(displayData);
-                } catch (JSONException e) {
-                    // TODO Auto-generated catch block
+                    JSONTokener jsonParser = new JSONTokener(strings);
+                    JSONObject jsonObject = (JSONObject)jsonParser.nextValue();
+                    DisplayUnitData displayUnitData = getDisplayDataFormat(jsonObject);
+                    list.add(displayUnitData);
+                    return list;
+                } catch (JSONException e){
                     e.printStackTrace();
                 }
+                finally {
+                    return null;
+                }
+
             }
-            return lists;
+
         }
         public String executeHttpGet() {
             String result = null;
@@ -181,5 +202,39 @@ public class MainActivity extends AppCompatActivity {
             }
             return result;
         }
+        public String decode2( String s )
+        {
+            StringBuilder sb = new StringBuilder( s.length() );
+            char[] chars = s.toCharArray();
+            for( int i = 0; i < chars.length; i++ )
+            {
+                char c = chars[i];
+                if( c == '\\' && chars[i + 1] == 'u')
+                {
+                    char cc = 0;
+                    for( int j = 0; j < 4; j++ )
+                    {
+                        char ch = Character.toLowerCase( chars[i + 2 + j] );
+                        if( '0' <= ch && ch <= '9' || 'a' <= ch && ch <= 'f' )
+                        {
+                            cc |= ( Character.digit( ch, 16 ) << ( 3 - j ) * 4 );
+                        }else
+                        {
+                            cc = 0;
+                            break;
+                        }
+                    }
+                    if ( cc > 0 )
+                    {
+                        i += 5;
+                        sb.append( cc );
+                        continue;
+                    }
+                }
+                sb.append( c );
+            }
+            return sb.toString();
+        }
+
     }
 }
